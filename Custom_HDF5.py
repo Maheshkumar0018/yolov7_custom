@@ -34,3 +34,18 @@ if pred is not None:
     # Print results
     for det in pred:
         print(det)  # Print detection coordinates and class probabilities
+
+
+
+
+
+# Assuming box contains [x_min, y_min, x_max, y_max] coordinates
+x_min, y_min, x_max, y_max = box
+
+x_center = (x_min + x_max) / 2
+y_center = (y_min + y_max) / 2
+width = x_max - x_min
+height = y_max - y_min
+
+# Now the bounding box is represented as [x_center, y_center, width, height]
+bounding_box = [x_center, y_center, width, height]
