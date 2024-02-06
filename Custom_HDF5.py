@@ -1,44 +1,117 @@
-import h5py
 import cv2
 import torch
-from yolov7.models.experimental import attempt_load
-from yolov7.utils.general import non_max_suppression, scale_coords
-from yolov7.utils.torch_utils import select_device
+from pathlib import Path
+from models.experimental import attempt_load
+from utils.general import non_max_suppression, scale_coords, xyxy2xywh,  increment_path
+from utils.torch_utils import select_device, time_synchronized
+import time
+from numpy import random
 
-# Load YOLOv7 model
-device = select_device('')
-model = attempt_load(weights='yolov7.pt', map_location=device)
-
-# Read HDF5 file
-hdf5_file = 'your_file.h5'
-with h5py.File(hdf5_file, 'r') as f:
-    images = f['images'][:]  # Assuming 'images' is the dataset containing your images
-
-# Resize images to 1280x1280
-resized_images = [cv2.resize(img, (1280, 1280)) for img in images]
-
-# Convert images to torch tensor
-img_tensor = torch.from_numpy(resized_images).float().div(255.0).unsqueeze(0).to(device)
-
-# Inference
-pred = model(img_tensor)[0]
-
-# Post-process predictions
-pred = non_max_suppression(pred, conf_thres=0.5, iou_thres=0.5)[0]
-
-# If detections are found
-if pred is not None:
-    # Rescale coordinates to original image size
-    pred[:, :4] = scale_coords(img_tensor.shape[2:], pred[:, :4], images.shape[1:])
-
-    # Print results
-    for det in pred:
-        print(det)  # Print detection coordinates and class probabilities
+from utils.plots import plot_one_box
 
 
 
+def detect_objects(image_path, weights='yolov7.pt', img_size=640, conf_thres=0.25, iou_thres=0.45, device='', 
+                   view_img=False, save_txt=False, save_conf=False, classes=None, agnostic_nms=False, augment=False, 
+                   project='runs/detect', name='sample_testing', exist_ok=False, no_trace=False, save_img=False):
+    
+    save_dir = Path(increment_path(Path(project) / name, exist_ok=exist_ok))  # increment run
+    (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
 
+    device = select_device(device)
+    half = device.type != 'cpu'  # half precision only supported on CUDA
+
+    t0 = time.time()  # Start time of detection
+
+    # Load model
+    model = attempt_load(weights, map_location=device)
+    stride = int(model.stride.max())  # model stride
+
+    if half:
+        model.half()  # to FP16
+
+    # Get names and colors
+    names = model.module.names if hasattr(model, 'module') else model.names
+    colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+
+    # Load image using OpenCV
+    img0 = cv2.imread(image_path)  # BGR
+
+    # Resize input image to the appropriate size
+    img = cv2.resize(img0, (img_size, img_size))
+
+    # Convert BGR to RGB
+    img = img[..., ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+    img = img.copy()  # Make a copy to ensure positive strides
+    img = torch.from_numpy(img).to(device)
+    img = img.half() if half else img.float()  # uint8 to fp16/32
+    img /= 255.0  # 0 - 255 to 0.0 - 1.0
+    if img.ndimension() == 3:
+        img = img.unsqueeze(0)
+
+    # Inference
+    t1 = time_synchronized()
+    with torch.no_grad():
+        pred = model(img, augment=augment)[0]
+    t2 = time_synchronized()
+
+    # Apply NMS
+    pred = non_max_suppression(pred, conf_thres, iou_thres, classes=classes, agnostic=agnostic_nms)
+    t3 = time_synchronized()
+
+    # Process detections
+    for i, det in enumerate(pred):  # detections per image
+        p, s, im0, frame = image_path, '', img0, 0
+
+        save_path = str(Path(project) / name)  # img.jpg
+        txt_path = str(Path(project) / 'labels' / Path(image_path).stem)  # img.txt
+        gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        if len(det):
+            # Rescale boxes from img_size to im0 size
+            det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+
+            # Print results
+            for c in det[:, -1].unique():
+                n = (det[:, -1] == c).sum()  # detections per class
+                s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+
+            # Write results
+            for *xyxy, conf, cls in reversed(det):
+                if save_txt:  # Write to file
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                    line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
+                    with open(txt_path + '.txt', 'a') as f:
+                        f.write(('%g ' * len(line)).rstrip() % line + '\n')
+
+                if save_img or view_img:  # Add bbox to image
+                    label = f'{names[int(cls)]} {conf:.2f}'
+                    plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+
+        # Print time (inference + NMS)
+        print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
+    
+    if save_txt or save_img:
+        s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
+        #print(f"Results saved to {save_dir}{s}")
+
+    if save_img:
+        save_path = str(save_dir / f"{name}.jpg")  # Ensure the path has the correct file extension
+        # Write the image using OpenCV
+        cv2.imwrite(save_path, im0)
+        print(f"The image with the result is saved in: {save_path}")
+
+    print(f'Done. ({time.time() - t0:.3f}s)')
+
+
+# Example usage
+image_path = "./inference/images/bus.jpg"
+detect_objects(image_path, save_img=True)
+
+
+
+
+---------------------------------------------------------------------------------------------------------------------
 # Assuming box contains [x_min, y_min, x_max, y_max] coordinates
 x_min, y_min, x_max, y_max = box
 
