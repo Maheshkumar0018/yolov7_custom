@@ -122,3 +122,23 @@ height = y_max - y_min
 
 # Now the bounding box is represented as [x_center, y_center, width, height]
 bounding_box = [x_center, y_center, width, height]
+
+
+
+-------------------------
+import os
+
+def check_path_type(path):
+    if os.path.isdir(path):
+        print("The entered path is a folder.")
+        # Add your code here for handling folder input
+    elif os.path.isfile(path):
+        print("The entered path is an image file.")
+        # Add your code here for handling image file input
+    else:
+        print("The entered path is invalid or does not exist.")
+
+# Example usage:
+path = input("Enter a folder path or an image file path: ")
+check_path_type(path)
+
