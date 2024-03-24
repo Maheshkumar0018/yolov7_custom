@@ -1,0 +1,13 @@
+Singular Value Decomposition (SVD): SVD is a matrix factorization technique that decomposes a matrix into three matrices: U, Σ, and V^T. In the context of image processing, you can use SVD to reduce the dimensionality of image data while preserving important information. Here's a basic outline of how you might use SVD for feature extraction:
+
+Convert each image into a matrix representation (e.g., flatten the pixel values into a vector).
+Stack these vectors to form a data matrix.
+Perform SVD on the data matrix.
+Select the most significant components (e.g., based on the magnitude of singular values) to represent each image.
+These selected components can serve as features for subsequent tasks.
+Connective Clustering: Connective clustering, also known as hierarchical clustering, is a technique used to group similar data points into clusters. Unlike partitioning-based clustering algorithms (e.g., K-means), hierarchical clustering builds a hierarchy of clusters. Here's how you might use connective clustering for feature extraction:
+
+Define a distance metric between pairs of data points (e.g., Euclidean distance between SVD-transformed feature vectors).
+Use hierarchical clustering algorithms like agglomerative clustering to group similar feature vectors together.
+Determine the appropriate number of clusters or cluster hierarchy based on domain knowledge or by analyzing clustering metrics (e.g., silhouette score).
+Assign each image to one or more clusters based on its feature vector representation.
