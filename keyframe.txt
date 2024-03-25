@@ -1,0 +1,27 @@
+Define Functions:
+
+extract_features: This function takes an image and a ResNet-50 model as input, preprocesses the image, passes it through the model, and returns the flattened feature vector extracted from the last fully connected layer of the ResNet-50 model.
+apply_pca: Applies PCA (Principal Component Analysis) on the extracted features to reduce their dimensionality.
+perform_clustering: Performs K-means clustering on the reduced feature matrix.
+select_keyframes: Selects keyframes based on a certain criterion from the cluster labels.
+summarize_video: Generates a video summary using the selected keyframes. It reads the input video frame by frame, writes the selected keyframes to an output video file, and returns the summary frames.
+main: The main function that orchestrates the video summarization process. It loads the ResNet-50 model with pretrained weights, extracts features from each frame of the input video using the ResNet-50 model, applies PCA for dimensionality reduction and K-means clustering to group similar features, selects keyframes based on the clustering results, and generates a video summary using those keyframes.
+Main Execution:
+
+The main function is called with the path to the input video file (video_path).
+Within the main function:
+The ResNet-50 model with pretrained weights is loaded.
+Features are extracted from each frame of the input video using the ResNet-50 model.
+PCA is applied for dimensionality reduction.
+K-means clustering is performed to group similar features.
+Keyframes are selected based on the clustering results.
+A video summary is generated using the selected keyframes.
+The generated video summary is returned and stored in the summary variable.
+Example Usage:
+
+An example usage of the main function is provided with the path to a sample video file ('./test.mp4').
+The main function is called with this video path, and the generated video summary is stored in the summary variable.
+Output:
+
+The summary variable contains the frames selected for the video summary.
+These frames can be further processed or analyzed as needed.
