@@ -81,7 +81,7 @@ def main(video_path):
     model = resnet50(pretrained=False)
     model.load_state_dict(torch.load(weights_path))
     # Replace the final fully connected layer with an Identity layer
-    model.fc = torch.nn.Identity()
+    # model.fc = torch.nn.Identity()
     
     features = []
     cap = cv2.VideoCapture(video_path)
