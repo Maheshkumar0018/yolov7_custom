@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
 import torch
 from torchvision.models import resnet50
 from torchvision import transforms
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
 
 # Function to extract visual features using ResNet-50
 def extract_features(image, model):
@@ -27,101 +28,66 @@ def apply_pca(features, n_components=50):
     pca = PCA(n_components=n_components)
     pca.fit(features)
     reduced_features = pca.transform(features)
-    # print('reduced features: ',reduced_features)
     return reduced_features
 
 # Function to perform clustering
 def perform_clustering(features, num_clusters=10):
     kmeans = KMeans(n_clusters=num_clusters, random_state=0)
     cluster_labels = kmeans.fit_predict(features)
-    # print('Cluster labels: ',cluster_labels)
     return cluster_labels
 
-# Function to select keyframes based on a certain criteria
-def select_keyframes(cluster_labels, num_keyframes=5):
-    # num_keyframes -  number of keyframes to select during the summarization process
-    unique_clusters, counts = np.unique(cluster_labels, return_counts=True)
-    keyframe_indices = []
-    for cluster_id in unique_clusters:
-        cluster_indices = np.where(cluster_labels == cluster_id)[0]
-        if len(cluster_indices) > 0:
-            # Choose a representative frame from the cluster
-            representative_index = cluster_indices[np.argmax(counts[cluster_id])]
-            keyframe_indices.append(representative_index)
-    
-    return keyframe_indices
+# Load ResNet-50 model
+resnet_model = resnet50(pretrained=True)
+# Remove the classification layer
+resnet_model = torch.nn.Sequential(*(list(resnet_model.children())[:-1]))
 
-# Function to summarize video using selected keyframes
-def summarize_video(video_path, keyframes):
-    summary = []
+# Assume you have original frames data (replace this with your actual keyframe data)
+# Here, we are loading frames from a video as an example
+def load_frames_from_video(video_path):
     cap = cv2.VideoCapture(video_path)
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frame_rate = int(cap.get(cv2.CAP_PROP_FPS))
-    out = cv2.VideoWriter('summary.mp4', cv2.VideoWriter_fourcc(*'mp4v'), frame_rate, (frame_width, frame_height))
-    
-    frame_index = 0
+    frames = []
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        if frame_index in keyframes:
-            summary.append(frame)
-            out.write(frame)
-        frame_index += 1
-    
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
     cap.release()
-    out.release()
-    cv2.destroyAllWindows()
-    return summary
+    return np.array(frames)
 
-def main(video_path):
-    # Load ResNet-50 with pretrained weights
-    weights_path = 'resnet50-0676ba61.pth'
-    model = resnet50(pretrained=False)
-    model.load_state_dict(torch.load(weights_path))
-    # Replace the final fully connected layer with an Identity layer
-    # model.fc = torch.nn.Identity()
-    
-    features = []
-    cap = cv2.VideoCapture(video_path)
-    
-    # Count the number of frames in the video
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    print("Total frames in the video:", total_frames)
-    
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        features.append(extract_features(frame, model))
-    cap.release()
-    
-    features = np.array(features)
-    
-    # Apply PCA for dimensionality reduction
-    reduced_features = apply_pca(features)
-    #print("Shape of reduced features after PCA:", reduced_features.shape)
-    
-    # Perform clustering on reduced feature space
-    cluster_labels = perform_clustering(reduced_features)
-    #print("Number of unique clusters:", len(np.unique(cluster_labels)))
-    
-    # Select keyframes based on clustering
-    keyframe_indices = select_keyframes(cluster_labels)
-    #print("Number of selected keyframes:", len(keyframe_indices))
-    
-    # Generate video summary using selected keyframes
-    summary = summarize_video(video_path, keyframe_indices)
-    
-    return summary
+# Load and preprocess frames from the example video
+video_path = "example.mp4"  # Change this to the path of your video
+original_frames = load_frames_from_video(video_path)
 
-# Example usage
-video_path = './test.mp4'
-summary = main(video_path)
+# Extract visual features using ResNet-50
+features = []
+for frame in original_frames:
+    features.append(extract_features(frame, resnet_model))
+features = np.array(features)
 
+# Perform PCA for dimensionality reduction
+reduced_features = apply_pca(features)
 
+# Perform clustering
+cluster_labels = perform_clustering(reduced_features)
 
-# # Load ResNet-50 with pretrained weights
-# model = resnet50(pretrained=True)
-# model.fc = torch.nn.Identity()
+# Print cluster labels
+print("Cluster labels:", cluster_labels)
+
+# Function to perform K-means clustering and select nearest frames for video summarization
+def select_nearest_frames(original_frames, cluster_labels, num_clusters=10, num_summary_frames=1000):
+    centroids = np.array([np.mean(original_frames[cluster_labels == i], axis=0) for i in range(num_clusters)])
+    nearest_cluster_indices = pairwise_distances_argmin_min(original_frames, centroids)[0]
+    nearest_frames_indices = []
+    total_frames_per_cluster = [int(num_summary_frames * np.sum(nearest_cluster_indices == i) / len(nearest_cluster_indices)) for i in range(num_clusters)]
+    for cluster_idx in range(num_clusters):
+        cluster_indices = np.where(nearest_cluster_indices == cluster_idx)[0]
+        distances_to_centroid = pairwise_distances(original_frames[cluster_indices], [centroids[cluster_idx]])
+        nearest_frames = cluster_indices[np.argsort(distances_to_centroid.ravel())][:total_frames_per_cluster[cluster_idx]]
+        nearest_frames_indices.append(nearest_frames)
+    selected_indices = np.concatenate(nearest_frames_indices)
+    selected_indices = selected_indices[:num_summary_frames]
+    return selected_indices
+
+# Example usage:
+# selected_indices = select_nearest_frames(original_frames, cluster_labels, num_clusters=10, num_summary_frames=1000)
