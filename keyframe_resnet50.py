@@ -91,3 +91,38 @@ def select_nearest_frames(original_frames, cluster_labels, num_clusters=10, num_
 
 # Example usage:
 # selected_indices = select_nearest_frames(original_frames, cluster_labels, num_clusters=10, num_summary_frames=1000)
+import numpy as np
+from sklearn.metrics import pairwise_distances_argmin_min
+
+# Assuming you have already performed K-means clustering and have the cluster centroids
+# keyframes is a numpy array of shape (num_keyframes, feature_dimension)
+# centroids is a numpy array of shape (num_clusters, feature_dimension)
+# num_clusters is the number of clusters determined by K-means
+
+# Calculate the nearest centroid for each keyframe
+nearest_cluster_indices = pairwise_distances_argmin_min(keyframes, centroids)[0]
+
+# Initialize a list to store indices of nearest frames
+nearest_frames_indices = []
+
+# Calculate how many frames to select from each cluster based on its proportion to the total number of frames
+total_frames_per_cluster = [int(1000 * np.sum(nearest_cluster_indices == i) / len(nearest_cluster_indices)) for i in range(num_clusters)]
+
+# Retrieve nearest frames for each cluster
+for cluster_idx in range(num_clusters):
+    cluster_indices = np.where(nearest_cluster_indices == cluster_idx)[0]
+    distances_to_centroid = pairwise_distances(keyframes[cluster_indices], [centroids[cluster_idx]])
+    nearest_frames = cluster_indices[np.argsort(distances_to_centroid.ravel())[:total_frames_per_cluster[cluster_idx]]]
+    nearest_frames_indices.append(nearest_frames)
+
+# Concatenate all the indices into a single list
+selected_indices = np.concatenate(nearest_frames_indices)
+
+# Ensure that the total number of selected frames is 1000 (adjustment in case of rounding errors)
+if len(selected_indices) > 1000:
+    selected_indices = selected_indices[:1000]
+elif len(selected_indices) < 1000:
+    remaining_indices = np.setdiff1d(np.arange(len(keyframes)), selected_indices)
+    selected_indices = np.concatenate([selected_indices, remaining_indices[:1000 - len(selected_indices)]])
+
+# selected_indices now contains the indices of the selected frames for video summarization
