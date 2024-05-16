@@ -1,0 +1,44 @@
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) 
+
+
+
+file_handler = logging.FileHandler('train_log.log')
+file_handler.setLevel(logging.INFO)  # You can set the level as per your requirement
+# Create a formatter
+formatter = logging.Formatter('%(levelname)s - %(message)s')
+# Set the formatter for the file handler
+file_handler.setFormatter(formatter)
+# Add the file handler to the logger
+logger.addHandler(file_handler)
+# Now you can log messages using logger.info(), logger.warning(), logger.error(), etc.
+logger.info('This is an info message')
+logger.warning('This is a warning message')
+
+
+
+log_file = 'test_logger.txt'
+
+
+class DualOutputHandler(logging.Handler):
+    def __init__(self, filename):
+        super().__init__()
+        self.file_handler = logging.FileHandler(filename)
+        self.console_handler = logging.StreamHandler(sys.stdout)
+    
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.file_handler.emit(record)
+        self.console_handler.emit(record)
+
+def setup_logger(log_file):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    handler = DualOutputHandler(log_file)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(handler)
+    return logger
+
+
+logging.error(f"Image at path {image_path} could not be loaded.")
+  logging.info(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
